@@ -4,14 +4,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator
 from typing_extensions import override
-
+from dotenv import load_dotenv
 import os
 import logging
 import time
 from openai import OpenAI, AssistantEventHandler
+load_dotenv()
 
 
-openai_api_key = "YOUR API KEY"
+openai_api_key =  os.getenv("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=openai_api_key)
 client = OpenAI(api_key=openai_api_key)
 app = FastAPI()
@@ -24,8 +25,8 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 # Hardcoded Assistant and Thread IDs
-assistant_id = "asst_fKYP8oJNpPFeZJPC3F2ZZAXg"  # Replace with your assistant ID
-thread_id = "thread_DneaN7SD9pYex38Z1Avt7dcj"  # Replace with your thread ID
+assistant_id =  os.getenv("ASSISTANT_ID")  # Replace with your assistant ID
+thread_id =  os.getenv("THREAD_ID")  # Replace with your thread ID
 
 def get_response_openai_streamed(query):
     for i in query:
@@ -49,7 +50,7 @@ async def get_context_docs_response(query: QueryModel):
         return HTTPException(status_code=500, detail=str(e))
 
 
-client = OpenAI(api_key="YOUR API KET")  # Add your actual
+client = OpenAI(api_key= os.getenv("OPENAI_API_KEY"))  # Add your actual
 
 # Hardcoded Assistant and Thread IDs
 assistant_id = "asst_fKYP8oJNpPFeZJPC3F2ZZAXg"  # Replace with your assistant ID
