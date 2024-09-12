@@ -1,25 +1,46 @@
-# FastAPI Assistant Integration
+# FastAPI OpenAI Integration
 
-## Overview
-
-This project is a FastAPI-based web application that integrates with OpenAI's API to handle assistant interactions. The application includes endpoints to fetch and post message history and to interact with the assistant for processing user messages.
+This project is a FastAPI application that integrates with the OpenAI API to allow users to interact with an assistant through streaming responses. It also includes endpoints for managing conversation history.
 
 ## Features
 
-- **Fetch Message History**: Retrieve the history of messages between the user and the assistant.
-- **Post Message History**: Post a new message and get the assistant's response.
-- **Chat with Assistant**: Send a user message to the assistant and receive a response.
+- **Streaming Responses:** Sends the assistant's responses to the client in a streaming format.
+- **Conversation History:** Allows retrieval of past conversations with the assistant.
+- **CORS Support:** Fully supports CORS to allow access from different origins.
 
-## Requirements
+## Installation
 
-- Python 3.8+
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [Pydantic](https://pydantic-docs.helpmanual.io/)
-- [OpenAI](https://beta.openai.com/)
-- [Python-dotenv](https://pypi.org/project/python-dotenv/)
-- [Uvicorn](https://www.uvicorn.org/)
+1. Clone the repository:
 
-You can install the required packages using the `requirements.txt` file:
+   ```bash
+   git clone https://github.com/yourusername/fastapi-openai-assistant.git
+   cd fastapi-openai-assistant
+Install dependencies:
 
-```bash
+bash
+Copy code
 pip install -r requirements.txt
+Create a .env file in the root directory with the following:
+
+env
+Copy code
+OPENAI_API_KEY=your_openai_api_key
+ASSISTANT_ID=your_assistant_id
+THREAD_ID=your_thread_id
+Run the application:
+
+bash
+Copy code
+uvicorn main:app --reload
+The application will be available at http://127.0.0.1:8000.
+
+2. Endpoints
+POST /retrieve100: Streams a response based on the user's query.
+GET /history: Fetches the conversation history from the assistant.
+POST /chat: Posts a message to the assistant and streams the response back.
+Environment Variables
+Ensure the following environment variables are set:
+3. 
+OPENAI_API_KEY: Your OpenAI API key.
+ASSISTANT_ID: The ID of the assistant you are interacting with.
+THREAD_ID: The thread ID to maintain conversation context.

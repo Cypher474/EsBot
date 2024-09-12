@@ -1,21 +1,20 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
-from openai import OpenAI
-from dotenv import find_dotenv, load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-import time
+from fastapi.responses import StreamingResponse
+from typing import AsyncGenerator
+from typing_extensions import override
+
 import os
 import logging
-from fastapi.responses import StreamingResponse
-from typing_extensions import override
-from openai import AssistantEventHandler
-# Initialize OpenAI client
-client = OpenAI(
-  api_key=os.environ.get("OPENAI_API_KEY"),
-)
-app = FastAPI()
-load_dotenv()
+import time
+from openai import OpenAI, AssistantEventHandler
 
+
+openai_api_key = "YOUR API KEY"
+openai_client = OpenAI(api_key=openai_api_key)
+client = OpenAI(api_key=openai_api_key)
+app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -24,35 +23,65 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
-
 # Hardcoded Assistant and Thread IDs
 assistant_id = "asst_fKYP8oJNpPFeZJPC3F2ZZAXg"  # Replace with your assistant ID
 thread_id = "thread_DneaN7SD9pYex38Z1Avt7dcj"  # Replace with your thread ID
 
+def get_response_openai_streamed(query):
+    for i in query:
+        time.sleep(0.05)
+        yield i
+
+class QueryModel(BaseModel):
+    question: str
+
+@app.post('/retrieve100', tags=['RAG_Related'])
+async def get_context_docs_response(query: QueryModel):
+    try:
+        try:
+
+            return StreamingResponse(get_response_openai_streamed(query.question), media_type="text/event-stream")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Error during streaming response")
+
+    except Exception as e:
+        print(f"An error generating response: {e}")
+        return HTTPException(status_code=500, detail=str(e))
+
+
+client = OpenAI(api_key="YOUR API KET")  # Add your actual
+
+# Hardcoded Assistant and Thread IDs
+assistant_id = "asst_fKYP8oJNpPFeZJPC3F2ZZAXg"  # Replace with your assistant ID
+thread_id = "thread_bSBjZAKV2oMDSwdSkEsrRIjo"  # Replace with your thread ID
+
+
 class Message(BaseModel):
     content: str
 
-class EventHandler(AssistantEventHandler):    
-  @override
-  def on_text_created(self, text) -> None:
-    print(f"\nassistant > ", end="", flush=True)
-      
-  @override
-  def on_text_delta(self, delta, snapshot):
-    print(delta.value, end="", flush=True)
-      
-  def on_tool_call_created(self, tool_call):
-    print(f"\nassistant > {tool_call.type}\n", flush=True)
-  
-  def on_tool_call_delta(self, delta, snapshot):
-    if delta.type == 'code_interpreter':
-      if delta.code_interpreter.input:
-        print(delta.code_interpreter.input, end="", flush=True)
-      if delta.code_interpreter.outputs:
-        print(f"\n\noutput >", flush=True)
-        for output in delta.code_interpreter.outputs:
-          if output.type == "logs":
-            print(f"\n{output.logs}", flush=True)   
+
+class EventHandler(AssistantEventHandler):
+    @override
+    def on_text_created(self, text) -> None:
+        print(f"\nassistant > ", end="", flush=True)
+
+    @override
+    def on_text_delta(self, delta, snapshot):
+        print(delta.value, end="", flush=True)
+
+    def on_tool_call_created(self, tool_call):
+        print(f"\nassistant > {tool_call.type}\n", flush=True)
+
+    def on_tool_call_delta(self, delta, snapshot):
+        if delta.type == 'code_interpreter':
+            if delta.code_interpreter.input:
+                print(delta.code_interpreter.input, end="", flush=True)
+            if delta.code_interpreter.outputs:
+                print(f"\n\noutput >", flush=True)
+                for output in delta.code_interpreter.outputs:
+                    if output.type == "logs":
+                        print(f"\n{output.logs}", flush=True)
+
 
 def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
     """
@@ -66,7 +95,7 @@ def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
                 formatted_elapsed_time = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
                 print(f"Run completed in {formatted_elapsed_time}")
                 logging.info(f"Run completed in {formatted_elapsed_time}")
-                
+
                 # Get messages here once Run is completed!
                 messages = client.beta.threads.messages.list(thread_id=thread_id)
                 last_message = messages.data[0]
@@ -75,9 +104,10 @@ def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
         except Exception as e:
             logging.error(f"An error occurred while retrieving the run: {e}")
             break
-        
+
         logging.info("Waiting for run to complete...")
         time.sleep(sleep_interval)
+
 
 @app.get("/history/")
 async def fetch_history_from_assistant():
@@ -93,7 +123,7 @@ async def fetch_history_from_assistant():
                 # If there's an existing user message, save it with the current assistant response
                 if user_message is not None:
                     history.append({"user_message": user_message, "assistant_response": assistant_response})
-                
+
                 # Update user message and reset assistant response
                 user_message = msg.content[0].text.value
                 assistant_response = None
@@ -105,11 +135,12 @@ async def fetch_history_from_assistant():
         # Append the last user-assistant pair to history, if exists
         if user_message is not None:
             history.append({"user_message": user_message, "assistant_response": assistant_response})
-        
+
         return {"history": history}
     except Exception as e:
         logging.error(f"Error fetching history from assistant: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 @app.post("/history/")
 async def post_history():
@@ -140,25 +171,24 @@ async def post_history():
         logging.error(f"Error fetching history from assistant: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    
 
-@app.post("/chat")
-async def chat(message: Message):
+@app.post('/chat', tags=['RAG_Related'])
+async def get_context_docs_response(query: QueryModel):
     try:
         # Create a message in the thread
         user_message = client.beta.threads.messages.create(
-            thread_id=thread_id, role="user", content=message.content
+            thread_id=thread_id, role="user", content=query.question
         )
-        
+
         # Run the assistant to process the message
         run = client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant_id,
-            instructions = """
+            instructions="""
 You are an assistant for a language school. Follow these guidelines to respond accurately in the language the user speaks. If the user changes their language, adapt and respond in the new language. Here are the instructions:
 
 1. If a user asks about **changing the level of their class**, inform them that they need to send a ticket through the portal addressed to the 'Academics' department with the category 'Level Change,' and include the reason for the change in the description.
-   
+
 2. For questions about **retaking a test**, let them know that they need to send a ticket to 'Academics' under the category 'Test,' and that they can only retake the test within one week of missing it.
 
 3. If asked about **replacing a missed class**, explain that missed classes are counted as absences unless the user took a full week of holidays.
@@ -235,17 +265,16 @@ Provide responses based on this information and do not generate answers that dev
 """
 
         )
-        
+
         # Wait for the run to complete and fetch the assistant's response
         response_text = wait_for_run_completion(client=client, thread_id=thread_id, run_id=run.id)
-        
-        return {"response": response_text}
-    
+
+        return StreamingResponse(get_response_openai_streamed(response_text), media_type="text/event-stream")
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
