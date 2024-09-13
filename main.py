@@ -8,14 +8,29 @@ from dotenv import load_dotenv
 import os
 import logging
 import time
-from openai import OpenAI, AssistantEventHandler
+import mysql.connector
+from mysql.connector import Error
+import openai
+
+# Load environment variables (for OpenAI API key)
 load_dotenv()
 
+# OpenAI API client initialization
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = openai_api_key
+client = openai.OpenAI(api_key=openai_api_key)
 
-openai_api_key =  os.getenv("OPENAI_API_KEY")
-openai_client = OpenAI(api_key=openai_api_key)
-client = OpenAI(api_key=openai_api_key)
+# Database connection parameters
+DB_CONFIG = {
+    'host': 'sql12.freesqldatabase.com',
+    'user': 'sql12731226',
+    'password': 'gznffMkE62',
+    'database': 'sql12731226'
+}
+
+# FastAPI app initialization
 app = FastAPI()
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -24,64 +39,67 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
 # Hardcoded Assistant and Thread IDs
-assistant_id =  os.getenv("ASSISTANT_ID")  # Replace with your assistant ID
-thread_id =  os.getenv("THREAD_ID")  # Replace with your thread ID
+assistant_id = os.getenv("ASSISTANT_ID")
+thread_id = None
 
-def get_response_openai_streamed(query):
-    for i in query:
-        time.sleep(0.05)
-        yield i
-
+# Models for queries and login requests
 class QueryModel(BaseModel):
     question: str
 
-@app.post('/retrieve100', tags=['RAG_Related'])
-async def get_context_docs_response(query: QueryModel):
-    try:
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+# Student and chat-related methods for database interaction
+class StudentDB:
+    def add_student(self, email: str, username: str, password: str):
         try:
+            connection = mysql.connector.connect(**DB_CONFIG)
+            if connection.is_connected():
+                cursor = connection.cursor()
+                query = "INSERT INTO StudentData (StudentEmail, StudentUsername, StudentPassword) VALUES (%s, %s, %s)"
+                cursor.execute(query, (email, username, password))
+                connection.commit()
+        except Error as e:
+            print(f"Error while inserting new student: {e}")
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
 
-            return StreamingResponse(get_response_openai_streamed(query.question), media_type="text/event-stream")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail="Error during streaming response")
+    def get_student_by_email(self, email: str):
+        try:
+            connection = mysql.connector.connect(**DB_CONFIG)
+            if connection.is_connected():
+                cursor = connection.cursor()
+                query = "SELECT * FROM StudentData WHERE StudentEmail = %s"
+                cursor.execute(query, (email,))
+                return cursor.fetchone()
+        except Error as e:
+            print(f"Error while fetching student: {e}")
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
 
-    except Exception as e:
-        print(f"An error generating response: {e}")
-        return HTTPException(status_code=500, detail=str(e))
+class ChatDB:
+    def add_chat(self, email: str, thread_id: str, assistant_id: str, chat_history: str):
+        try:
+            connection = mysql.connector.connect(**DB_CONFIG)
+            if connection.is_connected():
+                cursor = connection.cursor()
+                query = "INSERT INTO ChatData (StudentEmail, ThreadID, AssistantID, ChatHistory) VALUES (%s, %s, %s, %s)"
+                cursor.execute(query, (email, thread_id, assistant_id, chat_history))
+                connection.commit()
+        except Error as e:
+            print(f"Error while inserting chat: {e}")
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
 
-
-client = OpenAI(api_key= os.getenv("OPENAI_API_KEY"))  # Add your actual
-
-# Hardcoded Assistant and Thread IDs
-assistant_id = "asst_fKYP8oJNpPFeZJPC3F2ZZAXg"  # Replace with your assistant ID
-thread_id = "thread_bSBjZAKV2oMDSwdSkEsrRIjo"  # Replace with your thread ID
-
-
-class Message(BaseModel):
-    content: str
-
-
-class EventHandler(AssistantEventHandler):
-    @override
-    def on_text_created(self, text) -> None:
-        print(f"\nassistant > ", end="", flush=True)
-
-    @override
-    def on_text_delta(self, delta, snapshot):
-        print(delta.value, end="", flush=True)
-
-    def on_tool_call_created(self, tool_call):
-        print(f"\nassistant > {tool_call.type}\n", flush=True)
-
-    def on_tool_call_delta(self, delta, snapshot):
-        if delta.type == 'code_interpreter':
-            if delta.code_interpreter.input:
-                print(delta.code_interpreter.input, end="", flush=True)
-            if delta.code_interpreter.outputs:
-                print(f"\n\noutput >", flush=True)
-                for output in delta.code_interpreter.outputs:
-                    if output.type == "logs":
-                        print(f"\n{output.logs}", flush=True)
 
 
 def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
@@ -110,41 +128,92 @@ def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
         time.sleep(sleep_interval)
 
 
-@app.get("/history/")
-async def fetch_history_from_assistant():
+
+def get_response_openai_streamed(query):
+    for i in query:
+        time.sleep(0.05)
+        yield i
+
+
+def check_credentials(email: str, password: str) -> bool:
     try:
-        messages = client.beta.threads.messages.list(thread_id=thread_id)
-        history = []
-        # Initialize variables to store the user message and assistant response
-        user_message = None
-        assistant_response = None
+        connection = mysql.connector.connect(**DB_CONFIG)
+        if connection.is_connected():
+            cursor = connection.cursor()
+            query = "SELECT * FROM StudentData WHERE StudentEmail = %s AND StudentPassword = %s"
+            cursor.execute(query, (email, password))
+            result = cursor.fetchone()
+            return result is not None
+    except Error as e:
+        print(f"Error while connecting to MySQL: {e}")
+        return False
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
 
-        for msg in messages.data:
-            if msg.role == "user":
-                # If there's an existing user message, save it with the current assistant response
-                if user_message is not None:
-                    history.append({"user_message": user_message, "assistant_response": assistant_response})
+# Function to add new student if it doesn't exist
+def add_new_student_to_db(student, student_email, password):
+    """Add a new student to the StudentData table and return the newly created student."""
+    username = student_email.split('@')[0]  # Deriving username from email
+    student.add_student(student_email, username, password)
+    return student.get_student_by_email(student_email)
 
-                # Update user message and reset assistant response
-                user_message = msg.content[0].text.value
-                assistant_response = None
+# Function to create a new thread if it doesn't exist
+def create_new_thread(student_email, assistant_id, chat):
+    """Create a new thread using OpenAI API, add to ChatData table, and return the thread ID."""
+    thread = openai.beta.threads.create()
+    thread_id = thread.id
 
-            elif msg.role == "assistant":
-                # Update assistant response when an assistant message is found
-                assistant_response = msg.content[0].text.value
+    # Insert new thread details into the ChatData table
+    chat.add_chat(student_email, thread_id, assistant_id, "")
+    return thread_id
 
-        # Append the last user-assistant pair to history, if exists
-        if user_message is not None:
-            history.append({"user_message": user_message, "assistant_response": assistant_response})
+# Main function to get or create thread ID
+def get_or_create_thread_id(email: str, password: str, assistant_id: str = None):
+    student = StudentDB()
+    chat = ChatDB()
 
-        return {"history": history}
-    except Exception as e:
-        logging.error(f"Error fetching history from assistant: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        if connection.is_connected():
+            cursor = connection.cursor()
 
+            # Check if ThreadID exists
+            query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s"
+            cursor.execute(query, (email,))
+            result = cursor.fetchone()
+
+            if result:
+                return result[0]  # Return the existing ThreadID
+            else:
+                add_new_student_to_db(student, email, password)
+                thread_id = create_new_thread(email, assistant_id, chat)
+                return thread_id
+    except Error as e:
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+
+
+# Login endpoint
+@app.post("/login")
+async def login(request: LoginRequest):
+    global thread_id  # Declare global thread_id here
+    if check_credentials(request.email, request.password):
+        # Fetch or create ThreadID after successful login
+        thread_id = get_or_create_thread_id(request.email, request.password)
+        return {"message": "Login successful", "thread_id": thread_id}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
 @app.post("/history/")
 async def post_history():
+    if thread_id is None:
+        raise HTTPException(status_code=400, detail="Thread ID is not set.")
+    
     try:
         messages = client.beta.threads.messages.list(thread_id=thread_id)
         history = []
@@ -164,7 +233,6 @@ async def post_history():
         if user_message is not None:
             history.append({"user_message": user_message, "assistant_response": assistant_response})
 
-        # Reverse the history list to have the most recent messages first
         history.reverse()
 
         return {"history": history}
@@ -176,12 +244,10 @@ async def post_history():
 @app.post('/chat', tags=['RAG_Related'])
 async def get_context_docs_response(query: QueryModel):
     try:
-        # Create a message in the thread
         user_message = client.beta.threads.messages.create(
             thread_id=thread_id, role="user", content=query.question
         )
 
-        # Run the assistant to process the message
         run = client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant_id,
@@ -262,19 +328,14 @@ You are an assistant for a language school. Follow these guidelines to respond a
 
 37. Confirm that classes are currently **100% in-person and held Monday to Friday**.
 
-Provide responses based on this information and do not generate answers that deviate from these guidelines."
+Provide responses based on this information and do not generate answers that deviate from these guidelines and also please keep in mind the context and previous history that is very important."
 """
-
         )
 
-        # Wait for the run to complete and fetch the assistant's response
         response_text = wait_for_run_completion(client=client, thread_id=thread_id, run_id=run.id)
-
         return StreamingResponse(get_response_openai_streamed(response_text), media_type="text/event-stream")
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 if __name__ == "__main__":
     import uvicorn
