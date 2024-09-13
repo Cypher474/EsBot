@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from typing_extensions import override
 from dotenv import load_dotenv
 import os
@@ -40,13 +40,13 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# Hardcoded Assistant and Thread IDs
+# Hardcoded Assistant ID
 assistant_id = os.getenv("ASSISTANT_ID")
-thread_id = None
 
 # Models for queries and login requests
 class QueryModel(BaseModel):
     question: str
+    thread_id: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: str
@@ -100,8 +100,6 @@ class ChatDB:
                 cursor.close()
                 connection.close()
 
-
-
 def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
     """
     Waits for a run to complete and prints the elapsed time.
@@ -127,13 +125,10 @@ def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
         logging.info("Waiting for run to complete...")
         time.sleep(sleep_interval)
 
-
-
 def get_response_openai_streamed(query):
     for i in query:
         time.sleep(0.05)
         yield i
-
 
 def check_credentials(email: str, password: str) -> bool:
     try:
@@ -170,7 +165,7 @@ def create_new_thread(student_email, assistant_id, chat):
     return thread_id
 
 # Main function to get or create thread ID
-def get_or_create_thread_id(email: str, password: str, assistant_id: str = None):
+def get_or_create_thread_id(email: str, password: str, assistant_id: str = None, existing_thread_id: str = None):
     student = StudentDB()
     chat = ChatDB()
 
@@ -179,7 +174,15 @@ def get_or_create_thread_id(email: str, password: str, assistant_id: str = None)
         if connection.is_connected():
             cursor = connection.cursor()
 
-            # Check if ThreadID exists
+            if existing_thread_id:
+                # Check if the existing thread ID is valid for this user
+                query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s AND ThreadID = %s"
+                cursor.execute(query, (email, existing_thread_id))
+                result = cursor.fetchone()
+                if result:
+                    return existing_thread_id
+
+            # If no valid existing thread ID, check if ThreadID exists for this user
             query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s"
             cursor.execute(query, (email,))
             result = cursor.fetchone()
@@ -197,42 +200,30 @@ def get_or_create_thread_id(email: str, password: str, assistant_id: str = None)
             cursor.close()
             connection.close()
 
-
 # Login endpoint
 @app.post("/login")
 async def login(request: LoginRequest):
-    global thread_id  # Declare global thread_id here
     if check_credentials(request.email, request.password):
         # Fetch or create ThreadID after successful login
-        thread_id = get_or_create_thread_id(request.email, request.password)
+        thread_id = get_or_create_thread_id(request.email, request.password, assistant_id)
         return {"message": "Login successful", "thread_id": thread_id}
     else:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
 @app.post("/history/")
-async def post_history():
-    if thread_id is None:
-        raise HTTPException(status_code=400, detail="Thread ID is not set.")
+async def post_history(thread_id: str):
+    if not thread_id:
+        raise HTTPException(status_code=400, detail="Thread ID is not provided.")
     
     try:
         messages = client.beta.threads.messages.list(thread_id=thread_id)
         history = []
-        user_message = None
-        assistant_response = None
 
         for msg in messages.data:
-            if msg.role == "user":
-                if user_message is not None:
-                    history.append({"user_message": user_message, "assistant_response": assistant_response})
-                user_message = msg.content[-1].text.value
-                assistant_response = None
+            content = msg.content[0].text.value if msg.content else ""
+            history.append({"role": msg.role, "content": content})
 
-            elif msg.role == "assistant":
-                assistant_response = msg.content[-1].text.value
-
-        if user_message is not None:
-            history.append({"user_message": user_message, "assistant_response": assistant_response})
-
+        # Reverse the order of messages so the oldest appears first
         history.reverse()
 
         return {"history": history}
@@ -240,16 +231,18 @@ async def post_history():
         logging.error(f"Error fetching history from assistant: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
 @app.post('/chat', tags=['RAG_Related'])
-async def get_context_docs_response(query: QueryModel):
+async def get_context_docs_response(query: QueryModel,thread_id: str):
     try:
+        if not query.thread_id:
+            raise HTTPException(status_code=400, detail="Thread ID is not provided.")
+
         user_message = client.beta.threads.messages.create(
-            thread_id=thread_id, role="user", content=query.question
+            thread_id=query.thread_id, role="user", content=query.question
         )
 
         run = client.beta.threads.runs.create(
-            thread_id=thread_id,
+            thread_id=query.thread_id,
             assistant_id=assistant_id,
             instructions="""
 You are an assistant for a language school. Follow these guidelines to respond accurately in the language the user speaks. If the user changes their language, adapt and respond in the new language. Here are the instructions:
@@ -331,8 +324,12 @@ You are an assistant for a language school. Follow these guidelines to respond a
 Provide responses based on this information and do not generate answers that deviate from these guidelines and also please keep in mind the context and previous history that is very important."
 """
         )
+        
 
-        response_text = wait_for_run_completion(client=client, thread_id=thread_id, run_id=run.id)
+
+        
+
+        response_text = wait_for_run_completion(client=client, thread_id=query.thread_id, run_id=run.id)
         return StreamingResponse(get_response_openai_streamed(response_text), media_type="text/event-stream")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
