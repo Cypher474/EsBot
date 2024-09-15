@@ -1,7 +1,9 @@
 fastapi
 pydantic
-typing-extensions
+uvicorn
 python-dotenv
 mysql-connector-python
 openai
-uvicorn
+typing-extensions
+starlette
+itsdangerous
