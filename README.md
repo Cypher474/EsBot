@@ -1,46 +1,57 @@
-# FastAPI OpenAI Integration
+# ESBOT Backend
+ ESBOT is a FastAPI-based backend for a chatbot designed to handle student inquiries. It offers multilingual
+capabilities, session state management, and the ability to store and
+retrieve previous chat history. It is tailored to help students with
+academic-related questions, leveraging OpenAI\'s language model for
+intelligent responses.
 
-This project is a FastAPI application that integrates with the OpenAI API to allow users to interact with an assistant through streaming responses. It also includes endpoints for managing conversation history.
+# Key Features Multilingual Capability:
+ The bot can respond in multiple
+languages, adjusting to the user\'s preferred language. Session
+Management: Each chat session is maintained through session state,
+ensuring smooth conversations across multiple interactions. Chat
+History: The system stores previous conversations, allowing users to
+retrieve their chat history at any time. How to Clone and Run the
+Repository Clone the Repository First, clone the repository to your
+local machine using:
 
-## Features
+# bash Copy code git clone
+# https://github.com/yourusername/esbot-backend.git cd esbot-backend
+# Install Dependencies Before running the project, make sure to install
+all the required dependencies. You can do this by using:
 
-- **Streaming Responses:** Sends the assistant's responses to the client in a streaming format.
-- **Conversation History:** Allows retrieval of past conversations with the assistant.
-- **CORS Support:** Fully supports CORS to allow access from different origins.
+# bash Copy code pip install -r requirements.txt Run the Application To
+run the application using uvicorn, simply run:
+# uvicorn main:app --host 0.0.0.0 --port 8000
+bash Copy code uvicorn main:app \--reload This will start the FastAPI
+application and serve it at http://127.0.0.1:8000.
 
-## Installation
+Example Code Snippet Here is a quick overview of the backend structure
+and key imports:
 
-1. Clone the repository:
+python Copy code from fastapi import FastAPI, HTTPException, APIRouter,
+Depends from pydantic import BaseModel from fastapi.middleware.cors
+import CORSMiddleware from starlette.middleware.sessions import
+SessionMiddleware import mysql.connector import openai import os
 
-   ```bash
-   git clone https://github.com/yourusername/fastapi-openai-assistant.git
-   cd fastapi-openai-assistant
-Install dependencies:
+\# Load environment variables and initialize FastAPI app app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key=\"secret_signing_key\")
+app.add_middleware(CORSMiddleware, allow_origins=\[\"\*\"\],
+allow_methods=\[\"\*\"\], allow_headers=\[\"\*\"\]) Environment
+Variables Make sure to set up your .env file with the following keys:
 
-bash
-Copy code
-pip install -r requirements.txt
-Create a .env file in the root directory with the following:
+OPENAI_API_KEY: Your OpenAI API key. DB_CONFIG: Database connection
+details for MySQL. ASSISTANT_ID: The assistant ID for OpenAI API
+integration. API Endpoints Login Endpoint Allows users to log in with
+email and password:
 
-env
-Copy code
-OPENAI_API_KEY=your_openai_api_key
-ASSISTANT_ID=your_assistant_id
-THREAD_ID=your_thread_id
-Run the application:
+bash Copy code POST /login Chat Endpoint Submits user queries and
+retrieves responses from the assistant:
 
-bash
-Copy code
-uvicorn main:app --reload
-The application will be available at http://127.0.0.1:8000.
+bash Copy code POST /chat History Endpoint Fetches the chat history for
+a given session:
 
-2. Endpoints
-POST /retrieve100: Streams a response based on the user's query.
-GET /history: Fetches the conversation history from the assistant.
-POST /chat: Posts a message to the assistant and streams the response back.
-Environment Variables
-Ensure the following environment variables are set:
-3. 
-OPENAI_API_KEY: Your OpenAI API key.
-ASSISTANT_ID: The ID of the assistant you are interacting with.
-THREAD_ID: The thread ID to maintain conversation context.
+bash Copy code POST /history/ Logout Endpoint Clears session data:
+
+bash Copy code POST /logout License This project is licensed under the
+MIT License.
