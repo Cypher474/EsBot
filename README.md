@@ -20,7 +20,9 @@ https://github.com/yourusername/esbot-backend.git cd esbot-backend
 # Install Dependencies Before running the project, make sure to install
 all the required dependencies. You can do this by using:
 
-# bash Copy code pip install -r requirements.txt Run the Application To
+bash Copy code 
+# pip install -r requirements.txt
+Run the Application To
 run the application using uvicorn, simply run:
 # uvicorn main:app --host 0.0.0.0 --port 8000
 bash Copy code uvicorn main:app \--reload This will start the FastAPI
