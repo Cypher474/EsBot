@@ -15,8 +15,8 @@ retrieve their chat history at any time. How to Clone and Run the
 Repository Clone the Repository First, clone the repository to your
 local machine using:
 
-# bash Copy code git clone
-# https://github.com/yourusername/esbot-backend.git cd esbot-backend
+bash Copy code git clone
+https://github.com/yourusername/esbot-backend.git cd esbot-backend
 # Install Dependencies Before running the project, make sure to install
 all the required dependencies. You can do this by using:
 
