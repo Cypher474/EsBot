@@ -1,22 +1,23 @@
-from fastapi import FastAPI, HTTPException, APIRouter, UploadFile, File, Form
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from starlette.middleware.sessions import SessionMiddleware
-from typing import AsyncGenerator, Optional
-from typing_extensions import override
-from dotenv import load_dotenv
 import os
 import logging
 import time
 import mysql.connector
 from mysql.connector import Error
 import openai
+import base64
+import urllib.parse
+from fastapi import FastAPI, HTTPException, APIRouter, UploadFile, File, Form,Cookie,requests,Request
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from typing import AsyncGenerator, Optional
+from typing_extensions import override
+from dotenv import load_dotenv
+from Crypto.Cipher import AES
 
 # Load environment variables (for OpenAI API key)
 load_dotenv()
-# Add a secret key for the session
+
 # OpenAI API client initialization
 openai_api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = openai_api_key
@@ -33,65 +34,22 @@ DB_CONFIG = {
 # FastAPI app initialization
 app = FastAPI()
 
-
-app.add_middleware(SessionMiddleware, secret_key="secret_signing_key")
-
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allows all origins
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
+    allow_headers=["*"])
 
 # Hardcoded Assistant ID
 assistant_id = os.getenv("ASSISTANT_ID")
 
-# Models for queries and login requests
-# class QueryModel(BaseModel):
-#     question: str
-#     thread_id: Optional[str] = None
+
 
 class ChatRequest(BaseModel):
     question: str
     thread_id: Optional[str] = None  # Make thread_id optional
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-# Student and chat-related methods for database interaction
-class StudentDB:
-    def add_student(self, email: str, username: str, password: str):
-        try:
-            connection = mysql.connector.connect(**DB_CONFIG)
-            if connection.is_connected():
-                cursor = connection.cursor()
-                query = "INSERT INTO StudentData (StudentEmail, StudentUsername, StudentPassword) VALUES (%s, %s, %s)"
-                cursor.execute(query, (email, username, password))
-                connection.commit()
-        except Error as e:
-            print(f"Error while inserting new student: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-
-    def get_student_by_email(self, email: str):
-        try:
-            connection = mysql.connector.connect(**DB_CONFIG)
-            if connection.is_connected():
-                cursor = connection.cursor()
-                query = "SELECT * FROM StudentData WHERE StudentEmail = %s"
-                cursor.execute(query, (email,))
-                return cursor.fetchone()
-        except Error as e:
-            print(f"Error while fetching student: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
 
 class ChatDB:
     def add_chat(self, email: str, thread_id: str, assistant_id: str, chat_history: str):
@@ -108,6 +66,47 @@ class ChatDB:
             if connection.is_connected():
                 cursor.close()
                 connection.close()
+
+
+def decrypt_esdubai_student_id(cookies: str):
+    def get_cookie_value(cookies, cookie_name):
+        cookies_dict = dict(cookie.strip().split('=', 1) for cookie in cookies.split(';'))
+        return cookies_dict.get(cookie_name)
+
+    def fix_base64_padding(value):
+        missing_padding = len(value) % 4
+        if missing_padding != 0:
+            value += '=' * (4 - missing_padding)
+        return value
+
+    def unpad(s):
+        padding_len = s[-1]
+        return s[:-padding_len]
+
+    key = b'key'.ljust(16, b'\0')  # Replace 'key' with the actual key
+
+    encrypted_value = get_cookie_value(cookies, 'ESDUBAI_STUDENT_ID')
+    if not encrypted_value:
+        return None
+
+    encrypted_value = urllib.parse.unquote(encrypted_value)
+    encrypted_value = fix_base64_padding(encrypted_value)
+
+    try:
+        encrypted_value = base64.b64decode(encrypted_value)
+    except Exception as e:
+        print(f"Error during base64 decoding: {e}")
+        return None
+
+    cipher = AES.new(key, AES.MODE_ECB)
+    decrypted_value = cipher.decrypt(encrypted_value)
+
+    try:
+        decrypted_value = unpad(decrypted_value)
+        return decrypted_value.decode('utf-8')
+    except Exception as e:
+        print(f"Error during decryption: {e}")
+        return None
 
 def wait_for_run_completion(client, thread_id, run_id, sleep_interval=5):
     """
@@ -174,8 +173,7 @@ def create_new_thread(student_email, assistant_id, chat):
     return thread_id
 
 # Main function to get or create thread ID
-def get_or_create_thread_id(email: str, password: str, assistant_id: str = None, existing_thread_id: str = None):
-    student = StudentDB()
+def get_or_create_thread_id(studentid: str, assistant_id: str = None, existing_thread_id: str = None):
     chat = ChatDB()
 
     try:
@@ -183,26 +181,28 @@ def get_or_create_thread_id(email: str, password: str, assistant_id: str = None,
         if connection.is_connected():
             cursor = connection.cursor()
 
-            # Check if the user has a valid existing thread ID in the database
             if existing_thread_id:
+                # Check if the existing thread ID is valid for this user
                 query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s AND ThreadID = %s"
-                cursor.execute(query, (email, existing_thread_id))
+                cursor.execute(query, (studentid, existing_thread_id))
                 result = cursor.fetchone()
                 if result:
+                    print("Existing thread id is",existing_thread_id)
                     return existing_thread_id
 
-            # Fetch or create new thread for this user
+
+            # If no valid existing thread ID, check if ThreadID exists for this user
             query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s"
-            cursor.execute(query, (email,))
+            cursor.execute(query, (studentid,))
             result = cursor.fetchone()
 
             if result:
-                # Return the existing thread ID for this specific user
-                return result[0]
+                print("The thread id is ",result[0])
+                return result[0]  # Return the existing ThreadID
+
             else:
-                # If no thread exists, create a new one for the logged-in user
-                add_new_student_to_db(student, email, password)
-                thread_id = create_new_thread(email, assistant_id, chat)
+                thread_id = create_new_thread(studentid, assistant_id, chat)
+                print("My new created thread id is ",thread_id)
                 return thread_id
     except Error as e:
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -212,30 +212,23 @@ def get_or_create_thread_id(email: str, password: str, assistant_id: str = None,
             connection.close()
 
 # Login endpoint
-@app.post("/login")
-async def login(request: Request, response: Response, credentials: LoginRequest):
-    if check_credentials(credentials.email, credentials.password):
-        thread_id = get_or_create_thread_id(credentials.email, credentials.password)
-        # Store thread_id in session
-        request.session['thread_id'] = thread_id
-        return {"message": "Login successful", "thread_id": thread_id}
-    else:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+@app.get("/thread")
+async def thread(request: Request):
+    # Extract cookies from the request
+    cookies = request.headers.get("Cookies")
+    print("Cookies are",cookies)
 
-# Fetch the correct thread id for the logged-in user
-@app.get("/get-thread")
-async def get_thread(request: Request):
-    thread_id = request.session.get('thread_id')
-    if thread_id:
-        return {"thread_id": thread_id}
-    else:
-        raise HTTPException(status_code=404, detail="No thread found for this user")
-
-# Logout and clear session
-@app.post("/logout")
-async def logout(request: Request, response: Response):
-    request.session.clear()  # Clear the session
-    return {"message": "Logout successful"}
+    if not cookies:
+        raise HTTPException(status_code=400, detail="Cookie not found")
+    
+    studentid = decrypt_esdubai_student_id(cookies)
+    print("Student ID is",studentid)
+    if not studentid:
+        raise HTTPException(status_code=400, detail="Invalid cookie value")
+    
+    print("Student ID is test:",studentid)
+    thread_id = get_or_create_thread_id(studentid, assistant_id)
+    return {"thread_id": thread_id}
 
 
 @app.post("/history/")
@@ -259,8 +252,7 @@ async def post_history(thread_id: str):
         logging.error(f"Error fetching history from assistant: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-from pydantic import BaseModel
-from fastapi import HTTPException, APIRouter
+
 
 class QueryModel(BaseModel):
     question: str
@@ -286,7 +278,7 @@ async def get_context_docs_response(chat_request: ChatRequest):
         run = client.beta.threads.runs.create(
             thread_id=chat_request.thread_id,
             assistant_id=assistant_id,
-instructions = """
+            instructions = """
 You are a helpful and knowledgeable assistant designed to handle inquiries for students. You should remember previous conversations and respond accordingly. Depending on the user's language, adjust your replies to match their preferred language. When responding, be polite and provide concise, accurate information that adheres to the following instructions. If the user's query matches any of the predefined topics below, respond according to the given guidelines:
 
 1. **Class Level Changes**:
