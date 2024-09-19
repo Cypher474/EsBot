@@ -143,7 +143,7 @@ def check_credentials(email: str, password: str) -> bool:
         connection = mysql.connector.connect(**DB_CONFIG)
         if connection.is_connected():
             cursor = connection.cursor()
-            query = "SELECT * FROM StudentData WHERE StudentEmail = %s AND StudentPassword = %s"
+            query = "SELECT * FROM StudentData WHERE StudentID = %s AND StudentPassword = %s"
             cursor.execute(query, (email, password))
             result = cursor.fetchone()
             return result is not None
@@ -183,7 +183,7 @@ def get_or_create_thread_id(studentid: str, assistant_id: str = None, existing_t
 
             if existing_thread_id:
                 # Check if the existing thread ID is valid for this user
-                query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s AND ThreadID = %s"
+                query = "SELECT ThreadID FROM ChatData WHERE StudentID = %s AND ThreadID = %s"
                 cursor.execute(query, (studentid, existing_thread_id))
                 result = cursor.fetchone()
                 if result:
@@ -192,7 +192,7 @@ def get_or_create_thread_id(studentid: str, assistant_id: str = None, existing_t
 
 
             # If no valid existing thread ID, check if ThreadID exists for this user
-            query = "SELECT ThreadID FROM ChatData WHERE StudentEmail = %s"
+            query = "SELECT ThreadID FROM ChatData WHERE StudentID = %s"
             cursor.execute(query, (studentid,))
             result = cursor.fetchone()
 
