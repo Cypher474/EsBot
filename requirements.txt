@@ -7,3 +7,7 @@ openai
 typing-extensions
 starlette
 itsdangerous
+cryptography 
+base64 
+urllib3  
+requests  
