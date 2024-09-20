@@ -25,10 +25,10 @@ client = openai.OpenAI(api_key=openai_api_key)
 
 # Database connection parameters
 DB_CONFIG = {
-    'host': 'sql12.freesqldatabase.com',
-    'user': 'sql12731226',
-    'password': 'gznffMkE62',
-    'database': 'sql12731226'
+    'host': os.getenv("DB_HOST"),
+    'user': os.getenv("DB_USER"),
+    'password': os.getenv("DB_PASSWORD"),
+    'database': os.getenv("DB_NAME")
 }
 
 # FastAPI app initialization
@@ -46,7 +46,6 @@ app.add_middleware(
 assistant_id = os.getenv("ASSISTANT_ID")
 
 
-
 class ChatRequest(BaseModel):
     question: str
     thread_id: Optional[str] = None  # Make thread_id optional
@@ -57,7 +56,7 @@ class ChatDB:
             connection = mysql.connector.connect(**DB_CONFIG)
             if connection.is_connected():
                 cursor = connection.cursor()
-                query = "INSERT INTO ChatData (StudentEmail, ThreadID, AssistantID, ChatHistory) VALUES (%s, %s, %s, %s)"
+                query = "INSERT INTO ChatData (StudentID, ThreadID, AssistantID, ChatHistory) VALUES (%s, %s, %s, %s)"
                 cursor.execute(query, (email, thread_id, assistant_id, chat_history))
                 connection.commit()
         except Error as e:
