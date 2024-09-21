@@ -1,11 +1,11 @@
-fastapi
+fastapi==0.112.2
 pydantic
 uvicorn
 python-dotenv
 mysql-connector-python
 openai
 typing-extensions
-starlette
+starlette==0.38.4
 itsdangerous
 cryptography 
 base64 
