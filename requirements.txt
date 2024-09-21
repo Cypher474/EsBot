@@ -1,4 +1,4 @@
-fastapi
+fastapi==0.112.2
 pydantic
 uvicorn
 python-dotenv
