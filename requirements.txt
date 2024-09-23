@@ -1,4 +1,5 @@
 fastapi==0.112.2
+<<<<<<< HEAD
 pydantic==2.4.0
 uvicorn==0.23.0
 python-dotenv==1.0.0
@@ -10,3 +11,17 @@ itsdangerous==2.1.3
 cryptography==41.1.0
 urllib3==2.1.0
 requests==2.31.0
+=======
+pydantic
+uvicorn
+python-dotenv
+mysql-connector-python
+openai
+typing-extensions
+starlette
+itsdangerous
+cryptography 
+base64 
+urllib3  
+requests  
+>>>>>>> adc7d68af98fc6066f2b78c3e6483cffa35223c3
