@@ -3,7 +3,7 @@ pydantic==2.4.0
 uvicorn==0.23.0
 python-dotenv==1.0.0
 mysql-connector-python==8.2.1
-openai==0.28.0
+openai==1.44.1
 typing-extensions==4.8.1
 starlette==0.32.1
 itsdangerous==2.1.3
