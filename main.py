@@ -216,7 +216,7 @@ def get_or_create_thread_id(studentid: str, assistant_id: str = None, existing_t
 
 @app.post("/cookie")
 async def receive_cookie(cookie_data: CookieData):
-    # global stored_cookie
+    global stored_cookie
     stored_cookie = cookie_data.cookie
     return {"message": "Cookie received and stored"}
 
