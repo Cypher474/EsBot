@@ -46,6 +46,9 @@ app.add_middleware(
 assistant_id = os.getenv("ASSISTANT_ID")
 
 
+class CookieData(BaseModel):
+    cookie: str
+    
 class ChatRequest(BaseModel):
     question: str
     thread_id: Optional[str] = None  # Make thread_id optional
@@ -209,6 +212,19 @@ def get_or_create_thread_id(studentid: str, assistant_id: str = None, existing_t
         if connection.is_connected():
             cursor.close()
             connection.close()
+
+
+@app.post("/cookie")
+async def receive_cookie(cookie_data: CookieData):
+    # global stored_cookie
+    stored_cookie = cookie_data.cookie
+    return {"message": "Cookie received and stored"}
+
+@app.get("/cookie")
+async def get_cookie():
+    if stored_cookie is None:
+        return {"error": "No cookie has been stored yet"}
+    return {"cookie": stored_cookie}
 
 # Login endpoint
 @app.get("/thread")
