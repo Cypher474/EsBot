@@ -222,6 +222,7 @@ async def receive_cookie(cookie_data: CookieData):
 
 @app.get("/cookie")
 async def get_cookie():
+    global stored_cookie
     if stored_cookie is None:
         return {"error": "No cookie has been stored yet"}
     return {"cookie": stored_cookie}
