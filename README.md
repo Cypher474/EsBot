@@ -25,3 +25,11 @@ cd esbot-backend
 
 ### pip install -r requirements.txt
 ### uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+
+## API ENDPOINT
+- **Thread**: Decrypt the student cookie to get the StudentID , checks if the Student's ThreadID exists in the MYSQL Database otherwise creates one against that StudentID
+- **History**: Fetches history of chat using OpenAI Assistant API for the StudentID using their threadID.
+- **Chat**: Sends a chat request to the Assistant API and replies in real time
+
+ 
