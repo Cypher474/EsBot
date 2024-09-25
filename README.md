@@ -3,7 +3,7 @@
 capabilities, session state management, and the ability to store and
 retrieve previous chat history. It is tailored to help students with
 academic-related questions, leveraging OpenAI\'s language model for
-intelligent responses.
+intelligent responses. It is built with react frotnend , fastapi backend and MYSQL database
 
 # Key Features Multilingual Capability:
  The bot can respond in multiple
@@ -16,7 +16,8 @@ Repository Clone the Repository First, clone the repository to your
 local machine using:
 
 bash Copy code git clone
-https://github.com/yourusername/esbot-backend.git cd esbot-backend
+# https://github.com/yourusername/esbot-backend.git
+# cd esbot-backend
 # Install Dependencies Before running the project, make sure to install
 all the required dependencies. You can do this by using:
 
@@ -37,13 +38,10 @@ import CORSMiddleware from starlette.middleware.sessions import
 SessionMiddleware import mysql.connector import openai import os
 
 \# Load environment variables and initialize FastAPI app app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=\"secret_signing_key\")
-app.add_middleware(CORSMiddleware, allow_origins=\[\"\*\"\],
-allow_methods=\[\"\*\"\], allow_headers=\[\"\*\"\]) Environment
-Variables Make sure to set up your .env file with the following keys:
 
-OPENAI_API_KEY: Your OpenAI API key. DB_CONFIG: Database connection
-details for MySQL. ASSISTANT_ID: The assistant ID for OpenAI API
+# OPENAI_API_KEY: Your OpenAI API key.
+# DB_CONFIG: Database connection details for MySQL.
+# ASSISTANT_ID: The assistant ID for OpenAI API
 integration. API Endpoints Login Endpoint Allows users to log in with
 email and password:
 
