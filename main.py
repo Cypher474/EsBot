@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, APIRouter, UploadFile, File, Form,Co
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.openapi.docs import get_swagger_ui_html
 from typing import AsyncGenerator, Optional
 from typing_extensions import override
 from dotenv import load_dotenv
@@ -32,7 +33,12 @@ DB_CONFIG = {
 }
 
 # FastAPI app initialization
-app = FastAPI()
+app = FastAPI(
+    title="ES Student Bot",
+    description="Welcome to the documentation for ES Student Bot Backend! These API consist of  ES Student Bot GPT APIs! Here you can find all the info",
+    openapi_url="/esstudent/openapi.json",
+    docs_url="/esstudent/docs"
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -214,18 +220,32 @@ def get_or_create_thread_id(studentid: str, assistant_id: str = None, existing_t
             connection.close()
 
 
-@app.post("/cookie")
-async def receive_cookie(cookie_data: CookieData):
-    global stored_cookie
-    stored_cookie = cookie_data.cookie
-    return {"message": "Cookie received and stored"}
+# @app.post("/cookie")
+# async def receive_cookie(cookie_data: CookieData):
+#     global stored_cookie
+#     stored_cookie = cookie_data.cookie
+#     return {"message": "Cookie received and stored"}
 
-@app.get("/cookie")
-async def get_cookie():
-    global stored_cookie
-    if stored_cookie is None:
-        return {"error": "No cookie has been stored yet"}
-    return {"cookie": stored_cookie}
+# @app.get("/cookie")
+# async def get_cookie():
+#     global stored_cookie
+#     if stored_cookie is None:
+#         return {"error": "No cookie has been stored yet"}
+#     return {"cookie": stored_cookie}
+
+
+
+
+
+
+@app.get("/", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="API Docs")
+
+# Endpoint to serve OpenAPI schema
+@app.get("/esstudent/openapi.json", include_in_schema=False)
+async def get_openapi_schema():
+    return app.openapi()
 
 # Login endpoint
 @app.get("/thread")
@@ -273,7 +293,7 @@ async def post_history(thread_id: str):
 class QueryModel(BaseModel):
     question: str
 
-@app.post('/chat', tags=['RAG_Related'])
+@app.post('/chat', tags=['Chat'])
 async def get_context_docs_response(chat_request: ChatRequest):
     try:
         # If no thread_id is provided, create a new thread or raise an error based on your logic
